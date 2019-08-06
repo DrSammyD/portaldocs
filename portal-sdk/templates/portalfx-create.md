@@ -22,7 +22,7 @@ The Azure portal offers 3 ways to build a create form:
 
 ## Building custom create forms
 
-### Create Marketplace package (aka Gallery package)
+### Create Marketplace package (aka Gallery package) - Optional
 The Marketplace provides a categorized collection of packages which can be created in the portal. Publishing your package to the Marketplace is simple:
 
 1. Create a package and publish it to the DF Marketplace yourself, if applicable. Learn more about [publishing packages to the Marketplace](../../gallery-sdk/generated/index-gallery.md).
@@ -37,117 +37,72 @@ Note that the **+New** menu is curated and can change at any time based on C+E l
 
 ![The Marketplace][marketplace]
 
+If your create does not require a marketplace item, you can set your decorator to not require it when the blade is launched.
+
 ### Design for a single blade
-All create experiences should be designed for a single blade. Start by building a template blade. Always prefer dropdowns over pickers (form fields that allow selecting items from a list in a child blade) and avoid using selectors (form fields that open child blades).
+All create experiences should be designed for a single blade. Start by building a NoPdl Create blade. Always prefer dropdowns over pickers (form fields that allow selecting items from a list in a child blade) and avoid using selectors (form fields that open child blades).
 
 Email [ibizafxpm](mailto:ibizafxpm@microsoft.com?subject=Full-screen Create) if you have any questions about the current state of full-screen create experiences.
 
-### Add a provider component
-The [parameter collection framework](portalfx-parameter-collection-overview.md) is platform that enables you to build UX to collect data from the user. If you're not familiar with collectors and providers, now is a good time to read more about it.
+### Add a provisioning decorator
+The [typescript decorator framework](portalfx-no-pdl.md) enables you to build UX to collect data from the user. If you're not familiar with decorator blades, now is a good time to read more about it.
 
-In most cases, your blade will be launched from the Marketplace or a toolbar command (like Create from Browse). They will act as the collectors. Consequently, your blade will be expected to act as a provider. Here's what a provider looks like:
+In most cases, your blade will be launched from the Marketplace, a deep link, or a toolbar command (like Create from Browse), but you are able to open create blades directly with a blade reference.
+
+### Add a provisioner decorator
+A provisioning decorator is another component of template blades. 
 
 ```ts
-// Instantiate a parameter provider view model.
-this.parameterProvider = new MsPortalFx.ViewModels.ParameterProvider<DataModel, DataModel>(container, {
-    // This is where we receive the initial data defined in the UI definition file uploaded
-    // with the gallery package. We'll use the data to seed the edit scope. This is the time
-    // do do any necessary data transformations or account for incomplete inputs.
-    mapIncomingDataForEditScope: (incoming) => {
-        var dataModel: DataModel = {
-            someProperty: ko.observable(incoming.someProperty || "")
-        };
-        return dataModel;
-    },
-    // This is where we transform the edit scope data to outputs. We're just returning the
-    // data as it is, so no work needed here.
-    mapOutgoingDataForCollector: (outgoing) => {
-        return outgoing;
-    }
-});
+import * as TemplateBlade from "Fx/Composition/TemplateBlade";
+@TemplateBlade.DoesProvisioning.Decorator({ requiresMarketplaceId: true }) // requiresMarketplaceId defaults to true if you don't provide this options object
+export class CreateArmEngineBlade {
+    public context: TemplateBlade.DoesProvisioning.Context;
+}
 ```
 
-### Add a provisioner component
-A provisioner is another component in the [parameter collection framework](portalfx-parameter-collection-overview.md). If you're creating your resource by deploying a single template to ARM, you need to use an ARM provisioner. Otherwise, you need to use a regular provisioner to implement your custom deployment process.
+This decorator adds a provisioning property to the context of your blade which enables you to harness the framework's provisioning capabilities. There are 2 specific scenarios this covers.
 
 1. ARM provisioning:
-(Refer to the full EngineV3 sample to see the full create blade)
+(Refer to the full CreateArmEngineBlade sample to see the full create blade)
 
 ```ts
-// Instantiate a ARM provisioner view model.
-this.armProvisioner = new AzureResourceManager.Provisioner<DataModel>(container, initialState, {
-    // This is where we supply the ARM provisioner with the template deployment options
-    // required by the deployment operation.
-    supplyTemplateDeploymentOptions: (data, mode) => {
-        // Fill out the template deployment options.
-        var templateDeploymentOptions: AzureResourceManager.TemplateDeploymentOptions = {
-            subscriptionId: subscriptionId,
-            resourceGroupName: resourceGroupName,
-            resourceGroupLocation: resourceGroupLocation,
-            parameters: {
-                someProperty: data.someProperty()
-            },
-            deploymentName: galleryCreateOptions.deploymentName,
-            resourceProviders: [resourceProvider],
-            resourceId: resourceIdFormattedString,
-            // For the deployment template, you can either pass a link to the template (the URI of the
-            // template uploaded to the gallery service), or the actual JSON of the template (inline).
-            // Since gallery package for this sample is on your local box (under Local Development),
-            // we can't send ARM a link to template. We'll use inline JSON instead. This method returns
-            // the exact same template as the one in the package. Once your gallery package is uploaded
-            // to the gallery service, you can reference it as shown on the second line.
-            templateJson: this._getTemplateJson(),
-            // Or -> templateLinkUri: galleryCreateOptions.deploymentTemplateFileUris["TemplateName"],
-        };
-        return Q(templateDeploymentOptions);
+context.provisioning.deployTemplate({
+    subscriptionId: subscriptionId,
+    resourceGroupName: resourceGroupName,
+    resourceGroupLocation: resourceGroupLocation,
+    parameters: {
+        someProperty: data.someProperty()
     },
-
-    // Optional -> supplyStartboardInfo: (data: DataModel) => ParameterCollection.StartboardInfo;
-    // You can implement this callback if you want to supply different provisioning startboard
-    // info. If not implemented, the provisioner will use the info defined in the UI definition
-    // file in the gallery package. This is what we're doing here (preferable).
-
-    // Supplying an action bar and a parameter provider allows for automatic provisioning.
-    actionBar: this.actionBar,
-    parameterProvider: this.parameterProvider,
-
-    // Add create features such as opting in for ARM preflight validation. You can OR multiple
-    // features together.
-    createFeatures: CreateFeatures.EnableArmValidation
+    deploymentName: galleryCreateOptions.deploymentName,
+    resourceProviders: [resourceProvider],
+    resourceId: resourceIdFormattedString,
+    // For the deployment template, you can either pass a link to the template (the URI of the
+    // template uploaded to the gallery service), or the actual JSON of the template (inline).
+    // Since gallery package for this sample is on your local box (under Local Development),
+    // we can't send ARM a link to template. We'll use inline JSON instead. This method returns
+    // the exact same template as the one in the package. Once your gallery package is uploaded
+    // to the gallery service, you can reference it as shown on the second line.
+    templateJson: this._getTemplateJson(),
+    // Or -> templateLinkUri: galleryCreateOptions.deploymentTemplateFileUris["TemplateName"],
 });
 ```
 
 2. Custom provisioning:
-(Refer to the full RobotV3 sample to see the full create blade)
+(Refer to the full CreateCustomRobotBlade sample to see the full create blade)
 ```ts
-// Instantiate a provisioner view model.
-this.provisioner = new ParameterCollection.Provisioner<DataModel>(container, {
-    // This is where we supply the provisioner with the provisioning operation.
-    supplyProvisioningPromise: (data) => {
-        return this._dataContext.createMyResource(data).then(() => {
-            // Raise a notification, if needed.
-            // MsPortalFx.UI.NotificationManager.create(...).raise(...);
-
-            // Resolve the final promise with the container model for the startboard part.
-            // This is an object that contains the inputs to that part.
-            return {
-                // In this case, the startboard has one input called "id" (which is also
-                // the "startboardPartKeyId" on the startboardInfo object), and takes the
-                // name of the robot as the value.
-                id: data.someProperty()
-            };
-        });
+// Raise a notification, if needed.
+// MsPortalFx.UI.NotificationManager.create(...).raise(...);
+context.provisioning.deployCustom({
+    provisioningPromise: Q(model.robotData.createRobot(newRobot)).then((data) => {
+        // Close blade, notification will update when creation is complete
+        container.closeCurrentBlade();
+        // Adding some extra wait time to make the operation seem longer.
+        return newRobot;
+    }),
+    supplyPartReference: (provisionedRobot) => {
+        return new PartReference("RobotPart", { id: provisionedRobot.name() }, { extensionName: "SamplesExtension" });
     },
-
-    // Implement this callback if you want to supply different provisioning startboard info.
-    supplyStartboardInfo: (data) => {
-        return robotStartboardInfo;
-    },
-
-    // Supplying an action bar and a parameter provider allows for automatic provisioning.
-    actionBar: this.actionBar,
-    parameterProvider: this.parameterProvider
-});
+})
 ```
 
 ### Build your form
@@ -168,7 +123,7 @@ Each of these fields will retrieve values from the server and populate a dropdow
 locationDropDown.value(locationDropDown.fetchedValues().first((value)=> value.name === "centralus"))
 ```
 
-### Edit scopeless based accessible dropdowns
+### Resource dropdowns
 #### Subscriptions dropdown
 ```ts
 import * as SubscriptionDropDown from "Fx/Controls/SubscriptionDropDown";
@@ -219,7 +174,7 @@ If you sort and use disable or group functionality, this will sort inside of the
 
 ### Edit scope based accessible dropdowns
 ### Migrating from legacy ARM dropdowns to Accessible versions
-For scenarios where your Form is built in terms of EditScope, the FX now provides versions of the new, accessible ARM dropdowns that are drop-in replacements for old, non-accessible controls.  These have minimal API changes and are simple to integrate into existing Blades/Parts.
+For scenarios where your Form is built in the context of an EditScope, the FX now provides versions of the new, accessible ARM dropdowns that are drop-in replacements for old, non-accessible controls.  These have minimal API changes and are simple to integrate into existing Blades/Parts.
 
 These dropdowns are, however, based on a new accessible control which no longer support the following options.
 
@@ -333,11 +288,11 @@ var locationsDropDownOptions: LocationsDropDown.Options = {
     // filter: {
     //     allowedLocations: {
     //         locationNames: [ "centralus" ],
-    //         disabledMessage: "This location is disabled for demo purporses (not in allowed locations)."
+    //         disabledMessage: "This location is disabled for demo purposes (not in allowed locations)."
     //     },
     //     OR -> disallowedLocations: [{
     //         name: "westeurope",
-    //         disabledMessage: "This location is disabled for demo purporses (disallowed location)."
+    //         disabledMessage: "This location is disabled for demo purposes (disallowed location)."
     //     }]
     // }
 };
@@ -358,7 +313,7 @@ import * as Specs from "Fx/Specs/DropDown";
 {"gitdown": "include-section", "file": "../../../src/SDK/AcceptanceTests/Extensions/SamplesExtension/Extension/Client/V1/Create/EngineV3/ViewModels/CreateEngineBladeViewModel.ts", "section": "config#specDropDown"}
 
 #### Additional/custom validation to the ARM fields
-Sometimes you need to add extra validation on any of the previous ARM fields. For instance, you might want to check with you RP/backend to make sure that the selected location is available in certain cirqumstances. To do that, just add a custom validator like you would do with any regular form field. Exmaple:
+Sometimes you need to add extra validation on any of the previous ARM fields. For instance, you might want to check with you RP/backend to make sure that the selected location is available in certain circumstances. To do that, just add a custom validator like you would do with any regular form field. Example:
 
 ```ts
 // The locations drop down.
@@ -386,13 +341,11 @@ var locationsDropDownOptions: LocationsDropDown.Options = {
 this.locationsDropDown = new LocationsDropDown(container, locationsDropDownOptions);
 ```
 
-#### Wizards
+#### PDL Wizards and Creates
 The Azure portal has a **legacy pattern** for wizard blades, however customer feedback and usability has proven the design
-isn't ideal and shouldn't be used. Additionally, the wizard wasn't designed for
-[Parameter Collector v3](portalfx-parameter-collection-getting-started.md), which leads to a more
-complicated design and extended development time. The Portal Fx team is testing a new design for wizards to address
-these issues and will notify teams once usability has been confirmed and APIs updated. Wizards are discouraged and will
-not be supported.
+isn't ideal and shouldn't be used. Additionally, earlier creates weren't designed for [No pdl decorators](portalfx-no-pdl.md).
+and leads to a more complicated design and extended development time. The Portal team recommends a new pattern with full screen
+create blades utilizing the tabs controls as seen in the [No Pdl Engine Blade](engine-blade)
 
 Email [ibizafxpm](mailto:ibizafxpm@microsoft.com?subject=Create wizards + full screen) if you have any questions about
 the current state of wizards and full-screen Create support.
@@ -408,33 +361,13 @@ In an effort to resolve Create success regressions as early as possible, sev 2 [
 incidents will be created and assigned to extension teams whenever the success rate
 drops 5% or more for 50+ deployments over a rolling 24-hour period.
 
-#### ARM template deployment validation
-If your form uses the ARM provisioner, you need to opt in to deployment validation manually by adding
-`CreateFeatures.EnableArmValidation` to the `HubsProvisioner<T>` options. Wizards are not currently supported; we are
-working on a separate solution for wizards. Email [ibizafxpm](mailto:ibizafxpm@microsoft.com?subject=Create wizards + deployment validation)
-if you have any questions about wizard support.
-
-```ts
- this.armProvisioner = new HubsProvisioner.HubsProvisioner<DeployFromTemplateDataModel>(container, initialState, {
-    supplyTemplateDeploymentOptions: this._supplyProvisioningPromise.bind(this),
-    actionBar: this.actionBar,
-    parameterProvider: this.parameterProvider,
-    createFeatures: Arm.Provisioner.CreateFeatures.EnableArmValidation
-});
-```
-
-Refer to the Engine V3 sample for a running example
-- Client\Create\EngineV3\ViewModels\CreateEngineBladeViewModel.ts
-- [http://aka.ms/portalfx/samples#create/microsoft.engine](http://aka.ms/portalfx/samples#create/microsoft.engine)
 
 ### Automation options
-If your form uses the ARM provisioner, you will get an "Automation options" link in the action bar by default. This link
-gets the same template that is sent to ARM and gives it to the user. This allows customers to automate the creation of
-resources via CLI, PowerShell, and other supported tools/platforms. Wizards are not currently supported; we are working
-on a separate solution for wizards.
-
-Email [ibizafxpm](mailto:ibizafxpm@microsoft.com?subject=Create wizards + automation options)
-if you have any questions about wizard support.
+The provisioning decorator provides an "Automation options" blade reference in the provisioning context.
+This can be invoked in the same way as a template deployment. You can add this next to your create button.
+```
+container.openBlade(provisioning.getAutomationBladeReference(this._supplyTemplateDeploymentOptions())
+```
 
 ### Testing
 Due to the importance of Create and how critical validation is, all Create forms should have automated testing to help
@@ -450,11 +383,16 @@ in the standard [telemetry](portalfx-telemetry.md) tables. Query for
 
 ### Telemetry
 
-Refer to [Create telemetry](/portal-sdk/generated/index-portalfx-extension-monitor.md#portalfx-telemetry-create) for additional information on usage dashboards and queries.
+We've added a `ProvisioningBladeOpen` telemetry event to create which records duration telemetry as well as success and abandoned
+states based on whether the user completed a create or closed out before provisioning. For example you can see [how long](create-length-telemetry)
+it takes for your customers to decide whether or not to create your resource. Just set `extensionName` in the query to see your blade.
+
+
+For deployment telemetry, refer to [Create telemetry](/portal-sdk/generated/index-portalfx-extension-monitor.md#portalfx-telemetry-create) for additional information on usage dashboards and queries.
 
 ### Troubleshooting
 
-Refer to the [troublshooting guide](portalfx-create-troubleshooting.md) for additional debugging information.
+Refer to the [troubleshooting guide](portalfx-create-troubleshooting.md) for additional debugging information.
 
 
 ### Additional topics
@@ -472,3 +410,5 @@ are supported patterns:
 [create-originating-from-blade-part]: ../media/portalfx-create/create-originating-from-blade-part.png
 [plus-new]: ../media/portalfx-create/plus-new.png
 [marketplace]: ../media/portalfx-ui-concepts/gallery.png
+[engine-blade]: https://df.onecloud.azure-test.net/?clientOptimizations=false&samplesExtension=true#create/Microsoft.EngineNoPdlV1
+[create-length-telemetry]: https://dataexplorer.azure.com/clusters/azportalpartner/databases/AzurePortal?query=H4sIAAAAAAAAA3WQQU8CMRCF7/sr5saSNLAmYjRkPRg9cFBJJN7L9okl23YznVUw/nhbRYgYDp3Dm9f3vkwLIWwEPtrgH7QD1TQYTIs26Q1DC2616CTebWSBFg7C2+KT3l/BoDmjsREL6/Ak2nV0TXoVynMz3Ft0IymZ6hQ75/Bmc4/1q5tWGzx28IO9c4+RzX+ZkudbMLTM/2Y+ivYNZiaBSYjCKbHsNEesY/ClScjDUZ6jI3/m6jis0cg/eLVjVYdyRTH03OB3dR+MfbFgRc76XhBr07POm/FZVVXji0pR01p4eQb/BBwBKMpYxbQ4HDchxd45zfYD1CHVebEtYrnrUDRJsZfpXU2GtNyeYMpHioHltOMLxYUzDewBAAA=
